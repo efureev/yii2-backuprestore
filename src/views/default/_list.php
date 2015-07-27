@@ -2,8 +2,7 @@
 
 use yii\helpers\Html;
 
-use yii\grid\GridView;
-//use kartik\grid\GridView;
+use kartik\grid\GridView;
 use yii\helpers\Url;
 
 
@@ -47,7 +46,7 @@ echo GridView::widget([
                     ],
                     'urlCreator' => function ($action, $model, $key, $index) {
                 if ($action === 'restore_action') {
-                    $url = Yii::$app->urlManager->createUrl(array('backuprestore/default/restore', ['filename' => $model['name']]));
+                    $url = Yii::$app->urlManager->createUrl(['backuprestore/default/restore', ['filename' => $model['name']]]);
                     return $url;
                 }
             }

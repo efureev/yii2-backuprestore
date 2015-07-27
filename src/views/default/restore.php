@@ -2,37 +2,37 @@
 use yii\helpers\Html;
 
 
-$this->params ['breadcrumbs'] [] = [ 
-		'label' => 'Manage',
-		'url' => array (
-				'index' 
-		) 
+$this->params ['breadcrumbs'] [] = [
+	'label' => 'Manage',
+	'url' => [
+		'index'
+	]
 ];
-$this->params['breadcrumbs'][]= [
-'label'	=> 'Restore',
-'url'	=> array('restore'),
-];?>
+$this->params['breadcrumbs'][] = [
+	'label' => 'Restore',
+	'url' => ['restore'],
+]; ?>
 
 
-<?php
+<?
 //$this->widget('bootstrap.widgets.TbButtonGroup', array(
-		//'buttons'=>$this->actions,
-		//'type'=>'success',
-		//'size'=>'mini',
-		//'htmlOptions'=>array('class'=>'pull-right')
+//'buttons'=>$this->actions,
+//'type'=>'success',
+//'size'=>'mini',
+//'htmlOptions'=>array('class'=>'pull-right')
 //));
 ?>
 <h1>
-	<?php //echo  $this->action->id; ?>
+	<? //echo  $this->action->id; ?>
 </h1>
 
 <p>
-	<?php if(isset($error)) echo $error; else echo 'Done';?>
+	<? if (isset($error)) echo $error; else echo 'Done'; ?>
 </p>
 <p>
-    
-       <?= Html::a('View site', ['index'], ['class' => 'btn btn-warning']) ?>        
-    
-    
-	<?php //echo Html::link('View Site',Yii::app()->HomeUrl)?>
+
+	<?= Html::a('View site', ['index'], ['class' => 'btn btn-warning']) ?>
+
+
+	<? //echo Html::link('View Site',Yii::app()->HomeUrl)?>
 </p>

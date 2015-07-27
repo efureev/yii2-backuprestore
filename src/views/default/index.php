@@ -1,29 +1,28 @@
 <div class="backup-default-index">
 
-    <?php
-    $this->params ['breadcrumbs'] [] = [
-        'label' => 'Manage',
-        'url' => array(
-            'index'
-        )
-    ];
-    ?>
+	<?
+	$this->params ['breadcrumbs'] [] = [
+		'label' => 'Manage',
+		'url' => [
+			'index'
+		]
+	];
+	?>
 
-    <?php if (Yii::$app->session->hasFlash('success')): ?>
-        <div class="alert alert-success">
-            <?php echo Yii::$app->session->getFlash('success'); ?>
-        </div>
-    <?php endif; ?>
+	<? if (Yii::$app->session->hasFlash('success')): ?>
+		<div class="alert alert-success">
+			<?= Yii::$app->session->getFlash('success'); ?>
+		</div>
+	<? endif; ?>
 
 
-    <div class="row">
-        <div class="col-md-12">
-            <?php
-            echo $this->render('_list', array(
-                'dataProvider' => $dataProvider
-            ));
-            ?>
-        </div>
-    </div>
+	<div class="row">
+		<div class="col-md-12">
+			<?= $this->render('_list', [
+				'dataProvider' => $dataProvider
+			]);
+			?>
+		</div>
+	</div>
 
 </div>

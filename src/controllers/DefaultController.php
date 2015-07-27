@@ -3,7 +3,7 @@ namespace efureev\backuprestore\controllers;
 
 use Yii;
 use yii\web\Controller;
-use efureev\modules\backuprestore\models\UploadForm;
+use efureev\backuprestore\models\UploadForm;
 use yii\data\ArrayDataProvider;
 use yii\web\HttpException;
 use yii\web\NotFoundHttpException;
@@ -216,6 +216,7 @@ class DefaultController extends Controller {
     public function actionDelete($file = null) {
         $flashError = '';
         $flashMsg = '';
+        $sqlFile = '';
 
         $file = $_GET[0]['filename'];
 
@@ -247,11 +248,10 @@ class DefaultController extends Controller {
                 $request->sendFile(basename($sqlFile), file_get_contents($sqlFile));
             }
         }
-        throw new CHttpException(404, Yii::t('app', 'File not found'));
+        throw new NotFoundHttpException(404, Yii::t('app', 'File not found'));
     }
 
     public function actionIndex() {
-        //$this->layout = 'column1';
         $this->updateMenuItems();
         $path = $this->path;
         $dataArray = array();
