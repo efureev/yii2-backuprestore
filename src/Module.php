@@ -1,9 +1,9 @@
 <?php
-namespace oe\modules\backuprestore;
+namespace efureev\modules\backuprestore;
 
 class Module extends \yii\base\Module
 {
-   public $controllerNamespace = 'oe\modules\backuprestore\controllers';
+   public $controllerNamespace = 'efureev\modules\backuprestore\controllers';
 
     public function init()
     {

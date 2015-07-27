@@ -1,9 +1,9 @@
 <?php
-namespace oe\modules\backuprestore\controllers;
+namespace efureev\modules\backuprestore\controllers;
 
 use Yii;
 use yii\web\Controller;
-use oe\modules\backuprestore\models\UploadForm;
+use efureev\modules\backuprestore\models\UploadForm;
 use yii\data\ArrayDataProvider;
 use yii\web\HttpException;
 use yii\web\NotFoundHttpException;
@@ -44,7 +44,7 @@ class DefaultController extends Controller {
             $cmd = Yii::$app->db->createCommand($sqlArray);
             try {
                 $cmd->execute();
-            } catch (CDbException $e) {
+            } catch (\Exception $e) {
                 $message = $e->getMessage();
             }
         }
