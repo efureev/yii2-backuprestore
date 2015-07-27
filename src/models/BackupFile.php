@@ -1,6 +1,6 @@
 <?php
 
-namespace efureev\modules\backuprestore\models;
+namespace efureev\backuprestore\models;
 
 use yii\base\Model;
 

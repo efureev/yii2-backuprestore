@@ -15,7 +15,7 @@
     },
     "autoload": {
         "psr-4": {
-            "efureev\\modules\\backuprestore\\": "src/"
+            "efureev\\backuprestore\\": "src/"
         }
     }
 }

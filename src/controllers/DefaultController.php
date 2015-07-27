@@ -1,5 +1,5 @@
 <?php
-namespace efureev\modules\backuprestore\controllers;
+namespace efureev\backuprestore\controllers;
 
 use Yii;
 use yii\web\Controller;
