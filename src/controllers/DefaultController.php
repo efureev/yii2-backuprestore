@@ -117,28 +117,23 @@ class DefaultController extends Controller
 		$this->updateMenuItems();
 
 		$sqlFile = $this->path . basename($file);
-		$this->execSqlFile($sqlFile);
-
-		\Yii::$app->getSession()->setFlash('success', 'Дам воссоздан');
-		$this->redirect(['index']);
-	}
-
-
-	private function execSqlFile($sqlFile)
-	{
-		$message = "ok";
 
 		if (file_exists($sqlFile)) {
-			$sqlArray = file_get_contents($sqlFile);
+			$gzdata = file_get_contents($sqlFile);
+			$data = gzdecode($gzdata);
 
-			$cmd = Yii::$app->db->createCommand($sqlArray);
+			$cmd = Yii::$app->db->createCommand($data);
+
 			try {
 				$cmd->execute();
+				$message = 'Дамп воссоздан';
 			} catch (\Exception $e) {
 				$message = $e->getMessage();
 			}
 		}
-		return $message;
+
+		\Yii::$app->getSession()->setFlash('success', $message);
+		$this->redirect(['index']);
 	}
 
 	public function getColumns($tableName)
