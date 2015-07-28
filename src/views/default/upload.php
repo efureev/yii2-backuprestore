@@ -3,20 +3,23 @@ use kartik\file\FileInput;
 use yii\helpers\Html;
 use yii\widgets\ActiveForm;
 
-//use kartik\widgets\FileInput;
-
 
 /* @var $this yii\web\View */
 /* @var $model app\models\Document */
 /* @var $form yii\widgets\ActiveForm */
 
-
+$this->params ['breadcrumbs'] [] = [
+	'label' => 'Управление',
+	'url' => [
+		'index'
+	]
+];
 $this->params['breadcrumbs'][] = [
-	'label' => 'Upload',
+	'label' => 'Загрузить дамп',
 	'url' => ['upload'],
 ]; ?>
 
-<h1>Upload</h1>
+<h1>Загрузить дамп</h1>
 
 
 <? $form = ActiveForm::begin(['options' => ['enctype' => 'multipart/form-data']]); ?>
@@ -29,7 +32,7 @@ $this->params['breadcrumbs'][] = [
 
 <div class="form-group">
 	<?=
-	Html::submitButton('Save',
+	Html::submitButton('Сохранить',
 		['class' => 'btn btn-success']
 	) ?>
 </div>

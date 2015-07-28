@@ -2,14 +2,19 @@
 
 	<?
 	$this->params ['breadcrumbs'] [] = [
-		'label' => 'Manage',
+		'label' => 'Управление',
 		'url' => [
 			'index'
 		]
 	];
-	?>
 
-	<? if (Yii::$app->session->hasFlash('success')): ?>
+	if (!empty(Yii::$app->controller->menu)) {
+		echo \yii\widgets\Menu::widget([
+			'items' => Yii::$app->controller->menu
+		]);
+	}
+
+	if (Yii::$app->session->hasFlash('success')): ?>
 		<div class="alert alert-success">
 			<?= Yii::$app->session->getFlash('success'); ?>
 		</div>

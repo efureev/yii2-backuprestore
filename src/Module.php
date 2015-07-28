@@ -3,12 +3,16 @@ namespace efureev\backuprestore;
 
 class Module extends \yii\base\Module
 {
-   public $controllerNamespace = 'efureev\backuprestore\controllers';
+	public $path = null;
 
-    public function init()
-    {
-        parent::init();
+	public $ignoreTables = ['user', 'migration'];
 
-        // custom initialization code goes here
-    }
+	public $controllerNamespace = 'efureev\backuprestore\controllers';
+
+	public function init()
+	{
+		parent::init();
+
+		//\Yii::configure($this, require(__DIR__ . '/config.php'));
+	}
 }

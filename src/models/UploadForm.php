@@ -10,15 +10,21 @@ use yii\base\Model;
  * Yii module to backup, restore databse
  *
  * @version 1.0
- * @author Shiv Charan Panjeta <shiv@toxsl.com> <shivcharan.panjeta@outlook.com>
+ * @author  Shiv Charan Panjeta <shiv@toxsl.com> <shivcharan.panjeta@outlook.com>
  */
+
 /**
  * UploadForm class.
  * UploadForm is the data structure for keeping
  */
 class UploadForm extends Model
 {
-	public $upload_file ;
+	public $upload_file;
+
+	public static function label($n = 1)
+	{
+		return \Yii::t('app', 'File|Files', $n);
+	}
 
 	/**
 	 * Declares the validation rules.
@@ -27,12 +33,12 @@ class UploadForm extends Model
 	 */
 	public function rules()
 	{
-		if(!isset($this->scenario))
+		if (!isset($this->scenario))
 			$this->scenario = 'upload';
 
-		return array(
-				array('upload_file', 'required'),
-		);
+		return [
+			['upload_file', 'required'],
+		];
 	}
 
 	/**
@@ -40,11 +46,8 @@ class UploadForm extends Model
 	 */
 	public function attributeLabels()
 	{
-		return array(
-				'upload_file'=>'Upload File',
-		);
-	}
-	public static function label($n = 1) {
-		return Yii::t('app', 'File|Files', $n);
+		return [
+			'upload_file' => 'Файл дампа',
+		];
 	}
 }

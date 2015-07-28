@@ -1,365 +1,351 @@
 <?php
 namespace efureev\backuprestore\controllers;
 
-use Yii;
-use yii\web\Controller;
 use efureev\backuprestore\models\UploadForm;
+use Yii;
 use yii\data\ArrayDataProvider;
-use yii\web\HttpException;
-use yii\web\NotFoundHttpException;
+use yii\web\Controller;
 use yii\web\UploadedFile;
-use yii\helpers\Html;
-use yii\base\ErrorException;
 
-class DefaultController extends Controller {
+/**
+ * Class DefaultController
+ *
+ * @package efureev\backuprestore\controllers
+ *
+ * @property string $path Путь до папки с дампами
+ */
+class DefaultController extends Controller
+{
 
-    public $menu = [];
-    public $tables = [];
-    public $fp;
-    public $file_name;
-    public $_path = null;
-    public $back_temp_file = 'db_backup_';
+	public $menu = [];
+	public $tables = [];
+	public $fp;
+	public $file_name;
+	public $_path = null;
+	public $back_temp_file = 'db_backup_';
 
-    //public $layout = '//layout2';
+	protected function getPath()
+	{
+		if (isset($this->module->path))
+			$this->_path = \Yii::getAlias($this->module->path);
+		else
+			$this->_path = Yii::$app->basePath . '/_backup';
 
-    protected function getPath() {
-        if (isset($this->module->path))
-            $this->_path = $this->module->path;
-        else
-            $this->_path = Yii::$app->basePath . '/_backup/';
+		if (!file_exists($this->_path)) {
+			mkdir($this->_path);
+			chmod($this->_path, 0777);
+		}
+		return $this->_path . '/';
+	}
 
-        if (!file_exists($this->_path)) {
-            mkdir($this->_path);
-            chmod($this->_path, '777');
-        }
-        return $this->_path;
-    }
+	public function actionIndex()
+	{
+		$this->updateMenuItems();
+		$path = $this->path;
+		$dataArray = [];
 
-    public function execSqlFile($sqlFile) {
-        $message = "ok";
+		$list_files = glob($path . '*.sql');
 
-        if (file_exists($sqlFile)) {
-            $sqlArray = file_get_contents($sqlFile);
+		if ($list_files) {
+			$list = array_map('basename', $list_files);
+			sort($list);
+			foreach ($list as $id => $filename) {
+				$columns = [];
+				$columns['id'] = $id;
+				$columns['name'] = basename($filename);
+				$columns['size'] = filesize($path . $filename);
+				$columns['create_time'] = \Yii::$app->formatter->asDatetime(filectime($path . $filename));
+				$columns['modified_time'] = filemtime($path . $filename);
 
-            $cmd = Yii::$app->db->createCommand($sqlArray);
-            try {
-                $cmd->execute();
-            } catch (\Exception $e) {
-                $message = $e->getMessage();
-            }
-        }
-        return $message;
-    }
+				$dataArray[] = $columns;
+			}
+		}
+		$dataProvider = new ArrayDataProvider(['allModels' => $dataArray]);
 
-    public function getColumns($tableName) {
-        $sql = 'SHOW CREATE TABLE ' . $tableName;
-        $cmd = Yii::$app->db->createCommand($sql);
-        $table = $cmd->queryOne();
+		return $this->render('index', [
+			'dataProvider' => $dataProvider,
+		]);
+	}
 
-        $create_query = $table['Create Table'] . ';';
 
-        $create_query = preg_replace('/^CREATE TABLE/', 'CREATE TABLE IF NOT EXISTS', $create_query);
-        $create_query = preg_replace('/AUTO_INCREMENT\s*=\s*([0-9])+/', '', $create_query);
-        if ($this->fp) {
-            $this->writeComment('TABLE `' . addslashes($tableName) . '`');
-            $final = 'DROP TABLE IF EXISTS `' . addslashes($tableName) . '`;' . PHP_EOL . $create_query . PHP_EOL . PHP_EOL;
-            fwrite($this->fp, $final);
-        } else {
-            $this->tables[$tableName]['create'] = $create_query;
-            return $create_query;
-        }
-    }
+	public function actionDelete($file)
+	{
+		$this->updateMenuItems();
 
-    public function getData($tableName) {
-        $sql = 'SELECT * FROM ' . $tableName;
-        $cmd = Yii::$app->db->createCommand($sql);
-        $dataReader = $cmd->query();
+		$sqlFile = $this->path . basename($file);
 
-        $data_string = '';
+		if (file_exists($sqlFile)) {
+			@unlink($sqlFile);
+			$flashError = 'success';
+			$flashMsg = 'The file ' . $sqlFile . ' was successfully deleted.';
+		} else {
+			$flashError = 'error';
+			$flashMsg = 'The file ' . $sqlFile . ' was not found.';
+		}
 
-        foreach ($dataReader as $data) {
-            $itemNames = array_keys($data);
-            $itemNames = array_map("addslashes", $itemNames);
-            $items = join('`,`', $itemNames);
-            $itemValues = array_values($data);
-            $itemValues = array_map("addslashes", $itemValues);
-            $valueString = join("','", $itemValues);
-            $valueString = "('" . $valueString . "'),";
-            $values = "\n" . $valueString;
-            if ($values != "") {
-                $data_string .= "INSERT INTO `$tableName` (`$items`) VALUES" . rtrim($values, ",") . ";" . PHP_EOL;
-            }
-        }
+		\Yii::$app->getSession()->setFlash($flashError, $flashMsg);
+		$this->redirect(['index']);
+	}
 
-        if ($data_string == '')
-            return null;
 
-        if ($this->fp) {
-            $this->writeComment('TABLE DATA ' . $tableName);
-            $final = $data_string . PHP_EOL . PHP_EOL . PHP_EOL;
-            fwrite($this->fp, $final);
-        } else {
-            $this->tables[$tableName]['data'] = $data_string;
-            return $data_string;
-        }
-    }
+	public function actionCreate()
+	{
+		$tables = $this->getTables();
 
-    public function getTables($dbName = null) {
-        $sql = 'SHOW TABLES';
-        $cmd = Yii::$app->db->createCommand($sql);
-        $tables = $cmd->queryColumn();
-        return $tables;
-    }
+		if (!$this->StartBackup()) {
+			\Yii::$app->getSession()->setFlash('error', 'Ошибка создания дампа');
+			return $this->render('index');
+		}
 
-    public function StartBackup($addcheck = true) {
-        $this->file_name = $this->path . $this->back_temp_file . date('Y.m.d_H.i.s') . '.sql';
+		foreach ($tables as $tableName) {
+			$this->getColumns($tableName);
+		}
+		foreach ($tables as $tableName) {
+			$this->getData($tableName);
+		}
+		$this->EndBackup();
 
-        $this->fp = fopen($this->file_name, 'w+');
+		\Yii::$app->getSession()->setFlash('success', 'Дамп создан');
 
-        if ($this->fp == null)
-            return false;
-        fwrite($this->fp, '-- -------------------------------------------' . PHP_EOL);
-        if ($addcheck) {
-            fwrite($this->fp, 'SET AUTOCOMMIT=0;' . PHP_EOL);
-            fwrite($this->fp, 'START TRANSACTION;' . PHP_EOL);
-            fwrite($this->fp, 'SET SQL_QUOTE_SHOW_CREATE = 1;' . PHP_EOL);
-        }
-        fwrite($this->fp, 'SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0;' . PHP_EOL);
-        fwrite($this->fp, 'SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0;' . PHP_EOL);
-        fwrite($this->fp, '-- -------------------------------------------' . PHP_EOL);
-        $this->writeComment('START BACKUP');
-        return true;
-    }
+		$this->redirect(['index']);
+	}
 
-    public function EndBackup($addcheck = true) {
-        fwrite($this->fp, '-- -------------------------------------------' . PHP_EOL);
-        fwrite($this->fp, 'SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS;' . PHP_EOL);
-        fwrite($this->fp, 'SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS;' . PHP_EOL);
 
-        if ($addcheck) {
-            fwrite($this->fp, 'COMMIT;' . PHP_EOL);
-        }
-        fwrite($this->fp, '-- -------------------------------------------' . PHP_EOL);
-        $this->writeComment('END BACKUP');
-        fclose($this->fp);
-        $this->fp = null;
-    }
+	public function actionRestore($file)
+	{
+		$this->updateMenuItems();
 
-    public function writeComment($string) {
-        fwrite($this->fp, '-- -------------------------------------------' . PHP_EOL);
-        fwrite($this->fp, '-- ' . $string . PHP_EOL);
-        fwrite($this->fp, '-- -------------------------------------------' . PHP_EOL);
-    }
+		$sqlFile = $this->path . basename($file);
+		$this->execSqlFile($sqlFile);
 
-    public function actionCreate() {
-        $flashError = '';
-        $flashMsg = '';
+		\Yii::$app->getSession()->setFlash('success', 'Дам воссоздан');
+		$this->redirect(['index']);
+	}
 
-        $tables = $this->getTables();
 
-        if (!$this->StartBackup()) {
-            //render error
-            $flashError = 'error';
-            $flashMsg = 'Some errors creating the file';
-            return $this->render('index');
-        }
+	private function execSqlFile($sqlFile)
+	{
+		$message = "ok";
 
-        foreach ($tables as $tableName) {
-            $this->getColumns($tableName);
-        }
-        foreach ($tables as $tableName) {
-            $this->getData($tableName);
-        }
-        $this->EndBackup();
+		if (file_exists($sqlFile)) {
+			$sqlArray = file_get_contents($sqlFile);
 
-        $flashError = 'success';
-        $flashMsg = 'The file was created !!!';
+			$cmd = Yii::$app->db->createCommand($sqlArray);
+			try {
+				$cmd->execute();
+			} catch (\Exception $e) {
+				$message = $e->getMessage();
+			}
+		}
+		return $message;
+	}
 
-        \Yii::$app->getSession()->setFlash($flashError, $flashMsg);
-        
-        $this->redirect(array('index'));
-    }
+	public function getColumns($tableName)
+	{
+		$sql = 'SHOW CREATE TABLE ' . $tableName;
+		$cmd = Yii::$app->db->createCommand($sql);
+		$table = $cmd->queryOne();
 
-    public function actionClean($redirect = true) {
-        $ignore = array('tbl_user', 'tbl_user_role', 'tbl_event');
-        $tables = $this->getTables();
+		$create_query = $table['Create Table'] . ';';
 
-        if (!$this->StartBackup()) {
-            //render error
-            Yii::$app->user->setFlash('success', "Error");
-            return $this->render('index');
-        }
+		$create_query = preg_replace('/^CREATE TABLE/', 'CREATE TABLE IF NOT EXISTS', $create_query);
+		$create_query = preg_replace('/AUTO_INCREMENT\s*=\s*([0-9])+/', '', $create_query);
+		if ($this->fp) {
+			$this->writeComment('TABLE `' . addslashes($tableName) . '`');
+			$final = 'DROP TABLE IF EXISTS `' . addslashes($tableName) . '`;' . PHP_EOL . $create_query . PHP_EOL . PHP_EOL;
+			fwrite($this->fp, $final);
+		} else {
+			$this->tables[$tableName]['create'] = $create_query;
+			return $create_query;
+		}
+	}
 
-        $message = '';
+	public function getData($tableName)
+	{
+		$sql = 'SELECT * FROM ' . $tableName;
+		$cmd = Yii::$app->db->createCommand($sql);
+		$dataReader = $cmd->query();
 
-        foreach ($tables as $tableName) {
-            if (in_array($tableName, $ignore))
-                continue;
-            fwrite($this->fp, '-- -------------------------------------------' . PHP_EOL);
-            fwrite($this->fp, 'DROP TABLE IF EXISTS ' . addslashes($tableName) . ';' . PHP_EOL);
-            fwrite($this->fp, '-- -------------------------------------------' . PHP_EOL);
+		$data_string = '';
 
-            $message .= $tableName . ',';
-        }
-        $this->EndBackup();
+		foreach ($dataReader as $data) {
+			$itemNames = array_keys($data);
+			$itemNames = array_map("addslashes", $itemNames);
+			$items = join('`,`', $itemNames);
+			$itemValues = array_values($data);
+			$itemValues = array_map("addslashes", $itemValues);
+			$valueString = join("','", $itemValues);
+			$valueString = "('" . $valueString . "'),";
+			$values = "\n" . $valueString;
+			if ($values != "") {
+				$data_string .= "INSERT INTO `$tableName` (`$items`) VALUES" . rtrim($values, ",") . ";" . PHP_EOL;
+			}
+		}
 
-        // logout so there is no problme later .
-        Yii::$app->user->logout();
+		if ($data_string == '')
+			return null;
 
-        $this->execSqlFile($this->file_name);
-        unlink($this->file_name);
-        $message .= ' are deleted.';
-        Yii::$app->session->setFlash('success', $message);
-        return $this->redirect(array('index'));
-    }
+		if ($this->fp) {
+			$this->writeComment('TABLE DATA ' . $tableName);
+			$final = $data_string . PHP_EOL . PHP_EOL . PHP_EOL;
+			fwrite($this->fp, $final);
+		} else {
+			$this->tables[$tableName]['data'] = $data_string;
+			return $data_string;
+		}
+	}
 
-    public function actionDelete($file = null) {
-        $flashError = '';
-        $flashMsg = '';
-        $sqlFile = '';
+	/**
+	 * @return array
+	 */
+	public function getTables()
+	{
+		return Yii::$app->db->createCommand('SHOW TABLES')->queryColumn();
+	}
 
-        $file = $_GET[0]['filename'];
+	public function StartBackup($addcheck = true)
+	{
+		$this->file_name = $this->path . $this->back_temp_file . date('Y.m.d_H.i.s') . '.sql';
 
-        $this->updateMenuItems();
-        if (isset($file)) {
-            $sqlFile = $this->path . basename($file);
-            if (file_exists($sqlFile)) {
-                unlink($sqlFile);
-                $flashError = 'success';
-                $flashMsg = 'The file ' . $sqlFile . ' was successfully deleted.';
-            } else {
-                $flashError = 'error';
-                $flashMsg = 'The file ' . $sqlFile . ' was not found.';
-            }
-        } else {
-            $flashError = 'error';
-            $flashMsg = 'The file ' . $sqlFile . ' was not found.';
-        }
-        \Yii::$app->getSession()->setFlash($flashError, $flashMsg);
-        $this->redirect(array('index'));
-    }
+		$this->fp = fopen($this->file_name, 'w+');
 
-    public function actionDownload($file = null) {
-        $this->updateMenuItems();
-        if (isset($file)) {
-            $sqlFile = $this->path . basename($file);
-            if (file_exists($sqlFile)) {
-                $request = Yii::$app->getRequest();
-                $request->sendFile(basename($sqlFile), file_get_contents($sqlFile));
-            }
-        }
-        throw new NotFoundHttpException(404, Yii::t('app', 'File not found'));
-    }
+		if ($this->fp == null)
+			return false;
+		fwrite($this->fp, '-- -------------------------------------------' . PHP_EOL);
+		if ($addcheck) {
+			fwrite($this->fp, 'SET AUTOCOMMIT=0;' . PHP_EOL);
+			fwrite($this->fp, 'START TRANSACTION;' . PHP_EOL);
+			fwrite($this->fp, 'SET SQL_QUOTE_SHOW_CREATE = 1;' . PHP_EOL);
+		}
+		fwrite($this->fp, 'SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0;' . PHP_EOL);
+		fwrite($this->fp, 'SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0;' . PHP_EOL);
+		fwrite($this->fp, '-- -------------------------------------------' . PHP_EOL);
+		$this->writeComment('START BACKUP');
+		return true;
+	}
 
-    public function actionIndex() {
-        $this->updateMenuItems();
-        $path = $this->path;
-        $dataArray = array();
+	public function EndBackup($addcheck = true)
+	{
+		fwrite($this->fp, '-- -------------------------------------------' . PHP_EOL);
+		fwrite($this->fp, 'SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS;' . PHP_EOL);
+		fwrite($this->fp, 'SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS;' . PHP_EOL);
 
-        $list_files = glob($path . '*.sql');
-        if ($list_files) {
-            $list = array_map('basename', $list_files);
-            sort($list);
-            foreach ($list as $id => $filename) {
-                $columns = array();
-                $columns['id'] = $id;
-                $columns['name'] = basename($filename);
-                $columns['size'] = filesize($path . $filename);
+		if ($addcheck) {
+			fwrite($this->fp, 'COMMIT;' . PHP_EOL);
+		}
+		fwrite($this->fp, '-- -------------------------------------------' . PHP_EOL);
+		$this->writeComment('END BACKUP');
+		fclose($this->fp);
+		$this->fp = null;
+	}
 
-                $columns['create_time'] = date('Y-m-d H:i:s', filectime($path . $filename));
-                $columns['modified_time'] = date('Y-m-d H:i:s', filemtime($path . $filename));
+	public function writeComment($string)
+	{
+		fwrite($this->fp, '-- -------------------------------------------' . PHP_EOL);
+		fwrite($this->fp, '-- ' . $string . PHP_EOL);
+		fwrite($this->fp, '-- -------------------------------------------' . PHP_EOL);
+	}
 
-                $dataArray[] = $columns;
-            }
-        }
-        $dataProvider = new ArrayDataProvider(['allModels' => $dataArray]);
-        return $this->render('index', array(
-                    'dataProvider' => $dataProvider,
-        ));
-    }
 
-    public function actionSyncdown() {
-        $tables = $this->getTables();
+	public function actionClean()
+	{
+		if (!isset($this->module->ignoreTables) || !is_array($this->module->ignoreTables) || empty($this->module->ignoreTables)) {
+			$this->module->ignoreTables = [];
+		}
+		$tables = $this->getTables();
 
-        if (!$this->StartBackup()) {
-            //render error
-            return $this->render('index');
-        }
+		if (!$this->StartBackup()) {
+			Yii::$app->user->setFlash('success', "Error");
+			return $this->render('index');
+		}
 
-        foreach ($tables as $tableName) {
-            $this->getColumns($tableName);
-        }
-        foreach ($tables as $tableName) {
-            $this->getData($tableName);
-        }
-        $this->EndBackup();
-        return $this->actionDownload(basename($this->file_name));
-    }
+		$message = '';
 
-    public function actionRestore($file = null) {
-        $flashError = '';
-        $flashMsg = '';
+		foreach ($tables as $tableName) {
+			if (in_array($tableName, $this->module->ignoreTables))
+				continue;
+			fwrite($this->fp, '-- -------------------------------------------' . PHP_EOL);
+			fwrite($this->fp, 'DROP TABLE IF EXISTS ' . addslashes($tableName) . ';' . PHP_EOL);
+			fwrite($this->fp, '-- -------------------------------------------' . PHP_EOL);
 
-        $file = $_GET[0]['filename'];
+			$message .= $tableName . ',';
+		}
+		$this->EndBackup();
 
-        $this->updateMenuItems();
-        $sqlFile = $this->path . basename($file);
-        if (isset($file)) {
-            $sqlFile = $this->path . basename($file);
-            $flashError = 'success';
-            $flashMsg = 'Looks like working :)';
-        } else {
-            $flashError = 'error';
-            $flashMsg = 'Problems with the file name';
-        }
-        $this->execSqlFile($sqlFile);
+		Yii::$app->user->logout();
 
-        \Yii::$app->getSession()->setFlash($flashError, $flashMsg);
-        $this->redirect(array('index'));
-    }
+		$this->execSqlFile($this->file_name);
+		unlink($this->file_name);
+		$message .= ' удалены.';
+		Yii::$app->session->setFlash('success', $message);
+		return $this->redirect(['index']);
+	}
 
-    public function actionUpload() {
-        $model = new UploadForm();
-        if (isset($_POST['UploadForm'])) {
-            $model->attributes = $_POST['UploadForm'];
-            //oe change cUploaded for this
-            $model->upload_file = UploadedFile::getInstance($model, 'upload_file');
-            if ($model->upload_file->saveAs($this->path . $model->upload_file)) {
-                // redirect to success page
-                return $this->redirect(array('index'));
-            }
-        }
 
-        return $this->render('upload', array('model' => $model));
-    }
+	public function actionDownload($file)
+	{
+		$this->updateMenuItems();
 
-    protected function updateMenuItems($model = null) {
-        // create static model if model is null
-        if ($model == null)
-            $model = new UploadForm();
+		$sqlFile = $this->path . basename($file);
 
-        switch ($this->action->id) {
-            case 'restore': {
-                    $this->menu[] = array('label' => Yii::t('app', 'View Site'), 'url' => Yii::$app->HomeUrl);
-                }
-            case 'create': {
-                    $this->menu[] = array('label' => Yii::t('app', 'List Backup'), 'url' => array('index'));
-                }
-                break;
-            case 'upload': {
-                    $this->menu[] = array('label' => Yii::t('app', 'Create Backup'), 'url' => array('create'));
-                }
-                break;
-            default: {
-                    $this->menu[] = array('label' => Yii::t('app', 'List Backup'), 'url' => array('index'));
-                    $this->menu[] = array('label' => Yii::t('app', 'Create Backup'), 'url' => array('create'));
-                    $this->menu[] = array('label' => Yii::t('app', 'Upload Backup'), 'url' => array('upload'));
-                    $this->menu[] = array('label' => Yii::t('app', 'Restore Backup'), 'url' => array('restore'));
-                    $this->menu[] = array('label' => Yii::t('app', 'Clean Database'), 'url' => array('clean'));
-                    $this->menu[] = array('label' => Yii::t('app', 'View Site'), 'url' => Yii::$app->HomeUrl);
-                }
-                break;
-        }
-    }
+		if (file_exists($sqlFile))
+			Yii::$app->response->sendFile($sqlFile);
+	}
+
+
+	public function actionSyncdown()
+	{
+		$tables = $this->getTables();
+
+		if (!$this->StartBackup()) {
+			return $this->render('index');
+		}
+
+		foreach ($tables as $tableName) {
+			$this->getColumns($tableName);
+		}
+		foreach ($tables as $tableName) {
+			$this->getData($tableName);
+		}
+		$this->EndBackup();
+		return $this->actionDownload(basename($this->file_name));
+	}
+
+
+	public function actionUpload()
+	{
+		$model = new UploadForm();
+		if (isset($_POST['UploadForm'])) {
+			$model->attributes = $_POST['UploadForm'];
+			$model->upload_file = UploadedFile::getInstance($model, 'upload_file');
+			if ($model->upload_file->saveAs($this->path . $model->upload_file)) {
+				return $this->redirect(['index']);
+			}
+		}
+
+		return $this->render('upload', ['model' => $model]);
+	}
+
+	protected function updateMenuItems()
+	{
+		switch ($this->action->id) {
+			case 'restore':
+				$this->menu[] = array('label' => Yii::t('app', 'View Site'), 'url' => Yii::$app->HomeUrl);
+				break;
+
+			case 'create':
+				$this->menu[] = array('label' => Yii::t('app', 'Список дампов'), 'url' => array('index'));
+				break;
+
+			case 'upload':
+				$this->menu[] = array('label' => Yii::t('app', 'Создать дамп'), 'url' => array('create'));
+				break;
+
+			default:
+				$this->menu[] = array('label' => Yii::t('app', 'Список дампов'), 'url' => array('index'));
+				$this->menu[] = array('label' => Yii::t('app', 'Загрузить дамп'), 'url' => array('upload'));
+				$this->menu[] = array('label' => Yii::t('app', 'Очистить БД'), 'url' => array('clean'));
+		}
+	}
 
 }
