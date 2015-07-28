@@ -3,6 +3,7 @@ namespace efureev\backuprestore\controllers;
 
 use efureev\backuprestore\models\UploadForm;
 use Yii;
+use yii\base\Exception;
 use yii\data\ArrayDataProvider;
 use yii\web\Controller;
 use yii\web\UploadedFile;
@@ -44,7 +45,7 @@ class DefaultController extends Controller
 		$path = $this->path;
 		$dataArray = [];
 
-		$list_files = glob($path . '*.sql');
+		$list_files = glob($path . '*.sql.gz');
 
 		if ($list_files) {
 			$list = array_map('basename', $list_files);
@@ -236,7 +237,22 @@ class DefaultController extends Controller
 		fwrite($this->fp, '-- -------------------------------------------' . PHP_EOL);
 		$this->writeComment('END BACKUP');
 		fclose($this->fp);
-		$this->fp = null;
+
+		if ($this->createZip())
+			unlink($this->file_name);
+	}
+
+	private function createZip()
+	{
+		if (!file_exists($this->file_name))
+			throw new Exception('Файла '.$this->file_name.' нет');
+
+		$data = implode("", file($this->file_name));
+		$gzdata = gzencode($data, 9);
+		$fpZip = fopen($this->file_name.".gz", "w");
+		fwrite($fpZip, $gzdata);
+		fclose($fpZip);
+		return true;
 	}
 
 	public function writeComment($string)
